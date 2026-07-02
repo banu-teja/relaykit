@@ -16,6 +16,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import secrets
 from dataclasses import asdict
 from typing import Any
 
@@ -86,6 +88,25 @@ async def handle_supervision(ws: Any, session_id: str) -> None:
         return
 
     cmd_id = cmd.get("cmd_id", "")
+
+    expected_token = os.environ.get("LIVELINK_SUPERVISE_TOKEN")
+    if expected_token:
+        token = cmd.get("token")
+        if not token or not isinstance(token, str) or not secrets.compare_digest(token, expected_token):
+            await _send(
+                ws,
+                {
+                    "type": "error",
+                    "cmd_id": cmd_id,
+                    "code": "unauthorized",
+                    "message": "Invalid or missing token",
+                },
+            )
+            await ws.close(4401, "unauthorized")
+            return
+    else:
+        logger.warning("LIVELINK_SUPERVISE_TOKEN is not set. Supervision endpoint is unauthenticated.")
+
     after_event_id = cmd.get("after_event_id")
 
     if after_event_id:
