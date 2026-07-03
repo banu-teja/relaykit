@@ -1,0 +1,4 @@
+## 2026-07-03 - [CRITICAL] WebSocket Pre-Authentication State Leakage
+**Vulnerability:** The `/supervise/{session_id}` WebSocket endpoint immediately emitted a `connected` payload containing sensitive session metadata (model, state, pending approvals) upon connection, *before* receiving and validating the initial `subscribe` authentication message.
+**Learning:** WebSocket connections often require message-based authentication (since browser JS cannot easily send custom headers during the handshake). If an endpoint broadcasts current state on connection open, an unauthenticated attacker can capture that state simply by connecting, even if they are subsequently dropped for failing to authenticate.
+**Prevention:** Always require and validate the first message on a WebSocket connection (e.g., a `subscribe` or `auth` command) *before* emitting any sensitive payloads or system state.

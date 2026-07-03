@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from dataclasses import asdict
 from typing import Any
 
@@ -52,19 +53,6 @@ async def handle_supervision(ws: Any, session_id: str) -> None:
     input_manager = session.input_manager
     cancellation_token = session.cancellation_token
 
-    pending = _get_pending_approvals(input_manager)
-    await _send(
-        ws,
-        {
-            "type": "connected",
-            "session_id": session_id,
-            "model": session.agent.model,
-            "state": "ended" if not session.is_connected else "running",
-            "pending_approvals": pending,
-            "replay_from": None,
-        },
-    )
-
     try:
         subscribe_msg = await asyncio.wait_for(ws.recv(), timeout=_SUBSCRIBE_TIMEOUT)
     except (asyncio.TimeoutError, Exception):
@@ -84,6 +72,35 @@ async def handle_supervision(ws: Any, session_id: str) -> None:
         )
         await ws.close(4408, "subscribe_timeout")
         return
+
+    supervision_token = os.environ.get("LIVELINK_SUPERVISION_TOKEN")
+    if supervision_token:
+        token = cmd.get("token")
+        if not token or token != supervision_token:
+            await _send(
+                ws,
+                {
+                    "type": "error",
+                    "cmd_id": cmd.get("cmd_id", ""),
+                    "code": "unauthorized",
+                    "message": "Invalid or missing supervision token",
+                },
+            )
+            await ws.close(4401, "unauthorized")
+            return
+
+    pending = _get_pending_approvals(input_manager)
+    await _send(
+        ws,
+        {
+            "type": "connected",
+            "session_id": session_id,
+            "model": session.agent.model,
+            "state": "ended" if not session.is_connected else "running",
+            "pending_approvals": pending,
+            "replay_from": None,
+        },
+    )
 
     cmd_id = cmd.get("cmd_id", "")
     after_event_id = cmd.get("after_event_id")
