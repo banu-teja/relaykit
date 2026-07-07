@@ -54,6 +54,7 @@ async def serve(
     cors: bool = False,
     max_sessions: int | None = None,
     drain_timeout: float | None = None,
+    supervisor_token: str | None = None,
 ) -> None:
     """Start a WebSocket server for the agent with optional browser UI.
 
@@ -70,6 +71,7 @@ async def serve(
         cors: Enable CORS headers for cross-origin requests.
         max_sessions: Maximum concurrent sessions. Defaults to LIVELINK_MAX_SESSIONS or 100.
         drain_timeout: Seconds to wait for sessions to finish on shutdown. Defaults to 300.
+        supervisor_token: Optional token to require for /supervise/ connections. Defaults to LIVELINK_SUPERVISOR_TOKEN.
     """
     resolved_host = host or os.environ.get("LIVELINK_HOST", "0.0.0.0")
     resolved_port = port or int(os.environ.get("PORT", os.environ.get("LIVELINK_PORT", "8000")))
@@ -77,6 +79,7 @@ async def serve(
         os.environ.get("LIVELINK_MAX_SESSIONS", str(_DEFAULT_MAX_SESSIONS))
     )
     resolved_drain = drain_timeout if drain_timeout is not None else _DEFAULT_DRAIN_TIMEOUT
+    resolved_token = supervisor_token or os.environ.get("LIVELINK_SUPERVISOR_TOKEN")
     try:
         import websockets
         import websockets.http11
@@ -111,8 +114,9 @@ async def serve(
             path = getattr(path, "path", None)
         path = path or ""
 
-        if path.startswith("/supervise/"):
-            session_id = path.removeprefix("/supervise/").strip("/")
+        parsed_path, _, _ = path.partition("?")
+        if parsed_path.startswith("/supervise/"):
+            session_id = parsed_path.removeprefix("/supervise/").strip("/")
             await handle_supervision(connection, session_id)
             return
 
@@ -130,6 +134,28 @@ async def serve(
             state.active_sessions -= 1
 
     def process_request(connection: Any, request: Any) -> Any:
+        parsed_path, _, query = request.path.partition("?")
+        if parsed_path.startswith("/supervise/"):
+            if resolved_token:
+                import hmac
+                import urllib.parse
+
+                auth_header = request.headers.get("Authorization", "")
+                token = auth_header.removeprefix("Bearer ").strip()
+
+                if not token:
+                    query_params = urllib.parse.parse_qs(query)
+                    token = query_params.get("token", [""])[0]
+
+                if not token or not hmac.compare_digest(token, resolved_token):
+                    return websockets.http11.Response(
+                        401,
+                        "Unauthorized",
+                        websockets.datastructures.Headers(),
+                        b"Unauthorized",
+                    )
+            return None
+
         if request.path in ("/", "") and html_content:
             headers = websockets.datastructures.Headers(
                 {"Content-Type": "text/html; charset=utf-8"}
