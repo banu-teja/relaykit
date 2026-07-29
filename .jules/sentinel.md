@@ -1,0 +1,4 @@
+## 2024-07-29 - [CRITICAL] Cross-Site WebSocket Hijacking (CSWSH) in Built-in Server
+**Vulnerability:** The built-in WebSocket server (`agent.serve()`) did not validate the `Origin` header against the `Host` header when `cors=False`. This allowed malicious websites to connect to a locally running instance and interact with the AI agent.
+**Learning:** By default, WebSockets do not enforce Same-Origin Policy. The `websockets` library does not automatically block requests with mismatched Origins unless explicitly programmed to do so in the `process_request` hook. This is a common and critical security gap in WebSocket servers.
+**Prevention:** Always compare the `Origin` header to the `Host` header (accounting for `http://` and `https://` schemas) during the WebSocket handshake when CORS is disabled. If they mismatch, explicitly return a `403 Forbidden` HTTP response before the connection upgrades.

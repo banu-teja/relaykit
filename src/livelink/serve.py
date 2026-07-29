@@ -130,6 +130,16 @@ async def serve(
             state.active_sessions -= 1
 
     def process_request(connection: Any, request: Any) -> Any:
+        if not cors:
+            origin = request.headers.get("Origin")
+            host = request.headers.get("Host")
+            if origin is not None and host is not None:
+                if origin.lower() not in (f"http://{host.lower()}", f"https://{host.lower()}"):
+                    err_headers = websockets.datastructures.Headers({"Content-Type": "text/plain"})
+                    return websockets.http11.Response(
+                        403, "Forbidden", err_headers, b"Cross-Site WebSocket Hijacking blocked"
+                    )
+
         if request.path in ("/", "") and html_content:
             headers = websockets.datastructures.Headers(
                 {"Content-Type": "text/html; charset=utf-8"}
@@ -148,10 +158,13 @@ async def serve(
                     "uptime_seconds": round(time.monotonic() - state.start_time, 2),
                 }
             )
+            headers = websockets.datastructures.Headers({"Content-Type": "application/json"})
+            if cors:
+                headers["Access-Control-Allow-Origin"] = "*"
             return websockets.http11.Response(
                 code,
                 "OK" if code == 200 else "Service Unavailable",
-                websockets.datastructures.Headers({"Content-Type": "application/json"}),
+                headers,
                 body.encode(),
             )
         return None
