@@ -130,6 +130,27 @@ async def serve(
             state.active_sessions -= 1
 
     def process_request(connection: Any, request: Any) -> Any:
+        if not cors:
+            origin = request.headers.get("Origin")
+            if origin:
+                # Basic CSWSH protection: ensure Origin matches Host if CORS is disabled
+                host = request.headers.get("Host", "")
+                # Strip port from host for simple matching, or allow exact match
+                if not origin.endswith(f"//{host}") and not origin.endswith(f"//{resolved_host}:{resolved_port}"):
+                    # Don't block localhost/127.0.0.1 explicitly if host doesn't match perfectly
+                    # Check origin strictly against expected local origins
+                    allowed_origins = [
+                        f"http://{resolved_host}:{resolved_port}",
+                        f"https://{resolved_host}:{resolved_port}",
+                        f"http://localhost:{resolved_port}",
+                        f"https://localhost:{resolved_port}",
+                        f"http://127.0.0.1:{resolved_port}",
+                        f"https://127.0.0.1:{resolved_port}",
+                    ]
+                    if origin not in allowed_origins:
+                        logger.warning("Rejected request from unauthorized Origin: %s", origin)
+                        return websockets.http11.Response(403, "Forbidden", websockets.datastructures.Headers(), b"Forbidden")
+
         if request.path in ("/", "") and html_content:
             headers = websockets.datastructures.Headers(
                 {"Content-Type": "text/html; charset=utf-8"}
