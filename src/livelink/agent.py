@@ -260,7 +260,7 @@ class LiveAgent:
         ui: bool = True,
         ui_path: str | Path | None = None,
         deps: Any = None,
-        cors: bool = False,
+        cors: bool | str | list[str] = False,
     ) -> None:
         """Start a WebSocket server for this agent with browser UI.
 

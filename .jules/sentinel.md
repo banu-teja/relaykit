@@ -1,0 +1,4 @@
+## 2025-08-02 - [Medium] Security Headers and Overly Permissive CORS
+**Vulnerability:** The builtin WebSocket HTTP handler returned responses without security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`) and had a boolean CORS flag that defaulted to wildcard `*` if set to true.
+**Learning:** Development-friendly defaults (like `cors=True` meaning `*`) are often deployed to production. Relying on boolean flags for CORS limits operators from easily restricting allowed origins.
+**Prevention:** Support specifying exact CORS origins instead of boolean switches, and add security headers by default to all HTTP responses.
