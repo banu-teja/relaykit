@@ -51,7 +51,7 @@ async def serve(
     ui: bool = True,
     ui_path: str | Path | None = None,
     deps: Any = None,
-    cors: bool = False,
+    cors: bool | str | list[str] = False,
     max_sessions: int | None = None,
     drain_timeout: float | None = None,
 ) -> None:
@@ -67,7 +67,7 @@ async def serve(
         ui: Serve built-in audio client at /.
         ui_path: Path to custom static HTML file to serve instead of built-in UI.
         deps: Dependency injection object passed to tools via ToolContext.
-        cors: Enable CORS headers for cross-origin requests.
+        cors: Enable CORS headers for cross-origin requests. Can be a boolean, string, or list of origins.
         max_sessions: Maximum concurrent sessions. Defaults to LIVELINK_MAX_SESSIONS or 100.
         drain_timeout: Seconds to wait for sessions to finish on shutdown. Defaults to 300.
     """
@@ -130,12 +130,30 @@ async def serve(
             state.active_sessions -= 1
 
     def process_request(connection: Any, request: Any) -> Any:
+        req_origin = request.headers.get("Origin")
+        allow_origin = None
+        if cors is True:
+            allow_origin = "*"
+        elif isinstance(cors, str) and cors == "*":
+            allow_origin = "*"
+        elif isinstance(cors, str):
+            if req_origin == cors:
+                allow_origin = cors
+        elif isinstance(cors, list):
+            if req_origin in cors:
+                allow_origin = req_origin
+
         if request.path in ("/", "") and html_content:
             headers = websockets.datastructures.Headers(
-                {"Content-Type": "text/html; charset=utf-8"}
+                {
+                    "Content-Type": "text/html; charset=utf-8",
+                    "X-Content-Type-Options": "nosniff",
+                    "X-Frame-Options": "DENY",
+                }
             )
-            if cors:
-                headers["Access-Control-Allow-Origin"] = "*"
+            if allow_origin:
+                headers["Access-Control-Allow-Origin"] = allow_origin
+                headers["Vary"] = "Origin"
             return websockets.http11.Response(200, "OK", headers, html_content.encode())
         if request.path == "/health":
             status = "draining" if state.draining else "ok"
@@ -148,10 +166,19 @@ async def serve(
                     "uptime_seconds": round(time.monotonic() - state.start_time, 2),
                 }
             )
+            headers = websockets.datastructures.Headers(
+                {
+                    "Content-Type": "application/json",
+                    "X-Content-Type-Options": "nosniff",
+                }
+            )
+            if allow_origin:
+                headers["Access-Control-Allow-Origin"] = allow_origin
+                headers["Vary"] = "Origin"
             return websockets.http11.Response(
                 code,
                 "OK" if code == 200 else "Service Unavailable",
-                websockets.datastructures.Headers({"Content-Type": "application/json"}),
+                headers,
                 body.encode(),
             )
         return None
