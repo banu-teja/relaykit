@@ -1,0 +1,4 @@
+## 2023-10-27 - Added Security Headers to Websocket HTTP Upgrade Response
+**Vulnerability:** Missing standard HTTP security headers on UI and healthcheck endpoints.
+**Learning:** The application serves an embedded HTML UI (`src/livelink/_ui.py`) and a `/health` JSON endpoint using a custom `process_request` handler on top of the `websockets` library. Because it's not using a traditional web framework (like FastAPI or Flask) for these routes, standard security headers were missing, exposing the UI to potential Clickjacking, MIME-sniffing, and XSS risks.
+**Prevention:** When building custom HTTP handlers (especially for WebSocket upgrade endpoints that also serve standard HTTP content), explicitly add defense-in-depth headers like `Content-Security-Policy`, `X-Frame-Options`, and `X-Content-Type-Options`.
