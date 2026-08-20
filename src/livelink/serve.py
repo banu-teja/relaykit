@@ -156,6 +156,24 @@ async def serve(
             )
         return None
 
+    if not cors:
+        allowed_origins = [
+            f"http://localhost:{resolved_port}",
+            f"https://localhost:{resolved_port}",
+            f"http://127.0.0.1:{resolved_port}",
+            f"https://127.0.0.1:{resolved_port}",
+        ]
+        if resolved_host not in ("localhost", "127.0.0.1", "0.0.0.0"):
+            allowed_origins.extend(
+                [
+                    f"http://{resolved_host}:{resolved_port}",
+                    f"https://{resolved_host}:{resolved_port}",
+                ]
+            )
+        ws_origins = allowed_origins
+    else:
+        ws_origins = None
+
     url = f"http://{resolved_host}:{resolved_port}"
     logger.info("LiveLink agent serving at %s", url)
     print(f"LiveLink agent → {url}")
@@ -165,6 +183,7 @@ async def serve(
         resolved_host,
         resolved_port,
         process_request=process_request,
+        origins=ws_origins,
     ):
         await state.shutdown_event.wait()
 
