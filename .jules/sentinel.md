@@ -1,0 +1,4 @@
+## 2025-02-27 - Cross-Site WebSocket Hijacking (CSWSH) in serve.py
+**Vulnerability:** The local WebSocket server in `livelink/serve.py` uses `websockets` without checking the `Origin` header (unless CORS is enabled, where it just adds `Access-Control-Allow-Origin: *` to HTTP requests but doesn't restrict WS upgrades). This allows malicious websites opened by the user to connect to `ws://localhost:8080/ws` and interact with the LiveLink agent, potentially leaking voice/text data or executing tools on the user's behalf.
+**Learning:** `websockets.asyncio.server.serve` accepts an `origins` argument. When a custom `process_request` hook is provided that returns `None`, `websockets` still performs its built-in origin validation if the `origins` argument is set.
+**Prevention:** Always restrict WebSocket connections to trusted origins by explicitly setting the `origins` argument in `ws_serve`, especially for local services running on predictable ports.
