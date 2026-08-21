@@ -154,6 +154,20 @@ async def serve(
                 websockets.datastructures.Headers({"Content-Type": "application/json"}),
                 body.encode(),
             )
+
+        # Validate WebSocket Origin to prevent CSWSH
+        origin = request.headers.get("Origin")
+        if origin and not cors:
+            host_header = request.headers.get("Host", "")
+            # Basic validation: Origin should match the Host header (e.g., http://localhost:8000)
+            if host_header and not origin.endswith(f"://{host_header}"):
+                return websockets.http11.Response(
+                    403,
+                    "Forbidden",
+                    websockets.datastructures.Headers({"Content-Type": "text/plain"}),
+                    b"Cross-Site WebSocket Hijacking blocked",
+                )
+
         return None
 
     url = f"http://{resolved_host}:{resolved_port}"
