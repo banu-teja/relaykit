@@ -130,13 +130,20 @@ async def serve(
             state.active_sessions -= 1
 
     def process_request(connection: Any, request: Any) -> Any:
+        base_headers = {
+            "X-Frame-Options": "DENY",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'self'; connect-src 'self' ws: wss:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self'",
+        }
+
         if request.path in ("/", "") and html_content:
             headers = websockets.datastructures.Headers(
-                {"Content-Type": "text/html; charset=utf-8"}
+                {"Content-Type": "text/html; charset=utf-8", **base_headers}
             )
             if cors:
                 headers["Access-Control-Allow-Origin"] = "*"
             return websockets.http11.Response(200, "OK", headers, html_content.encode())
+
         if request.path == "/health":
             status = "draining" if state.draining else "ok"
             code = 503 if state.draining else 200
@@ -148,10 +155,15 @@ async def serve(
                     "uptime_seconds": round(time.monotonic() - state.start_time, 2),
                 }
             )
+            headers = websockets.datastructures.Headers(
+                {"Content-Type": "application/json", **base_headers}
+            )
+            if cors:
+                headers["Access-Control-Allow-Origin"] = "*"
             return websockets.http11.Response(
                 code,
                 "OK" if code == 200 else "Service Unavailable",
-                websockets.datastructures.Headers({"Content-Type": "application/json"}),
+                headers,
                 body.encode(),
             )
         return None
